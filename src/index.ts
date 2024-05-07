@@ -1,11 +1,15 @@
 import * as fs from "fs";
 import { Transaction } from "./types";
-
+// import { mempool } from "./store/mempool";
+import { utxos } from "./store/utxos";
+import { LengthValidator } from "./features/validator/length";
+import { HashValidator } from "./features/validator/hash";
 import { reversify, sha256 } from "./utils";
 import { txSerializer, txWeight } from "./features/encoding/serializer";
 import { feePerByte } from "./features/block/fee";
 import { mine } from "./features/block/mine";
 import * as path from "path";
+import * as bitcoin from "bitcoinjs-lib";
 
 (async () => {
   const files = fs.readdirSync("./mempool");
@@ -16,7 +20,10 @@ import * as path from "path";
 
   for (const file of files) {
     const tx = JSON.parse(fs.readFileSync(`./mempool/${file}`, "utf8"));
-    
+    // mempool.set(`${file}`.split(".")[0], {
+    //   ...tx,
+    //   txid: `${file}`.split(".")[0],
+    // });
     mempool.push(tx);
   }
 
@@ -31,9 +38,17 @@ import * as path from "path";
   }
 
   const { serializedBlock, blockHash, coinbaseTransaction } = mine(txs);
+
+  const ct = bitcoin.Transaction.fromHex(
+    txSerializer(coinbaseTransaction).serializedWTx
+  );
+
   fs.writeFileSync(outputFile, serializedBlock);
   fs.appendFileSync(outputFile, "\n");
-  fs.appendFileSync(outputFile, txSerializer(coinbaseTransaction).serializedTx);
+  fs.appendFileSync(
+    outputFile,
+    txSerializer(coinbaseTransaction).serializedWTx
+  );
   fs.appendFileSync(outputFile, "\n");
   fs.appendFileSync(
     outputFile,
