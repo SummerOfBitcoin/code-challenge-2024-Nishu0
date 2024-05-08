@@ -1,9 +1,9 @@
 import { reversify, sha256 } from "../../utils";
-import { Transaction } from "../../types";
+import { Transaction } from "../transaction";
 import { merkleRoot } from "./merkleRoot";
-import { txSerializer } from "../encoding/serializer";
-import { ZEROS, generateCoinbaseTransaction } from "./coinbaseTransaction";
+import { generateCoinbaseTransaction } from "./coinbaseTransaction";
 import { totalFee } from "./fee";
+import { DIFFICULTY, WITNESS_RESERVED_VALUE } from "../../constants";
 
 export const mine = (
   txs: Transaction[]
@@ -16,27 +16,25 @@ export const mine = (
     "0000ffff00000000000000000000000000000000000000000000000000000000";
   const version = Buffer.alloc(4);
   version.writeInt32LE(4);
-  //make it the same as the difficulty
 
-  const witnessMerkleRootHash = reversify(
-    merkleRoot([
-      ZEROS, //zeros are for the coinbase transaction
-      ...txs.map((tx) =>
-        reversify(sha256(sha256(txSerializer(tx).serializedWTx)))
-      ),
-    ])
+  // const witnessMerkleRootHash = merkleRoot([
+  //   ZEROS, //zeros are for the coinbase transaction
+  //   ...txs.map((tx) => sha256(sha256(txSerializer(tx).serializedWTx))),
+  // ]);
+  const witnessMerkleRootHash = merkleRoot([
+    WITNESS_RESERVED_VALUE,
+    ...txs.map((tx) => reversify(tx.wtxid)),
+  ]);
+  const commitmentHash = sha256(
+    sha256(witnessMerkleRootHash + WITNESS_RESERVED_VALUE)
   );
-  const commitmentHash = sha256(sha256(witnessMerkleRootHash + ZEROS));
   const fees = totalFee(txs);
   const coinbaseTransaction = generateCoinbaseTransaction(fees, commitmentHash);
 
-  const prevBlockHash =
-    "0000ffff00000000000000000000000000000000000000000000000000000000"; //make it the same as the difficulty
+  const prevBlockHash = DIFFICULTY; //make it the same as the difficulty
 
   const merkleRootHash = merkleRoot(
-    [coinbaseTransaction, ...txs].map((tx) =>
-      sha256(sha256(txSerializer(tx).serializedTx))
-    )
+    [coinbaseTransaction, ...txs].map((tx) => reversify(tx.txid))
   );
 
   const time = Buffer.alloc(4);
@@ -54,7 +52,6 @@ export const mine = (
       "hex"
     )}${nonceBuf.toString("hex")}`;
 
-    // console.log(serializedBlock);
     const blockHash = reversify(sha256(sha256(serializedBlock)));
     if (
       Buffer.from(difficulty, "hex").compare(Buffer.from(blockHash, "hex")) < 0
